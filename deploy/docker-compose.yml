@@ -1,0 +1,99 @@
+name: skiff
+networks:
+  skiff: {}
+volumes:
+  temporal-postgres-data: {}
+  clickhouse-data: {}
+  garage-data: {}
+  garage-meta: {}
+  nix-store: {}            # used in Milestone 5 by the worker container
+
+x-platform: &platform
+  platform: ${SKIFF_PLATFORM:-linux/amd64}
+
+services:
+  temporal-postgres:
+    <<: *platform
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    volumes:
+      - "temporal-postgres-data:/var/lib/postgresql/data"
+    networks: [skiff]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  temporal:
+    <<: *platform
+    image: temporalio/auto-setup:1.25
+    depends_on:
+      temporal-postgres: { condition: service_healthy }
+    ports: ["7233:7233", "8233:8233"]
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-postgres
+    networks: [skiff]
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "temporal:7233"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 30s
+
+  clickhouse:
+    <<: *platform
+    image: clickhouse/clickhouse-server:24.8
+    ports: ["8123:8123", "9000:9000"]
+    networks: [skiff]
+    volumes:
+      - "clickhouse-data:/var/lib/clickhouse"
+      - "./clickhouse-init:/docker-entrypoint-initdb.d:ro"
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  garage:
+    <<: *platform
+    image: dxflrs/garage:v1.0.1
+    ports: ["3900:3900", "3902:3902"]
+    networks: [skiff]
+    volumes:
+      - "garage-data:/var/lib/garage/data"
+      - "garage-meta:/var/lib/garage/meta"
+      - "./garage.toml:/etc/garage.toml:ro"
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  garage-bootstrap:
+    <<: *platform
+    # Built from Dockerfile.garage-bootstrap: Alpine + /garage binary copied from
+    # dxflrs/garage:v1.0.1 (which is scratch-based and has no shell).
+    build:
+      context: .
+      dockerfile: Dockerfile.garage-bootstrap
+    depends_on:
+      garage: { condition: service_healthy }
+    networks: [skiff]
+    volumes:
+      - "./scripts/bootstrap-garage.sh:/bootstrap.sh:ro"
+      - "./scripts:/shared-scripts"          # writable; bootstrap drops skiff-keys.env here
+      - "garage-data:/var/lib/garage/data"
+      - "garage-meta:/var/lib/garage/meta"
+      - "./garage.toml:/etc/garage.toml:ro"
+    entrypoint: ["/bin/sh", "/bootstrap.sh"]
+    restart: "no"
