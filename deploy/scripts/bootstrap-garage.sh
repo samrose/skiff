@@ -1,8 +1,10 @@
 #!/bin/sh
 set -eu
 NODE_ID=$(/garage -c /etc/garage.toml status | awk 'NR==3 {print $1}')
-if /garage -c /etc/garage.toml layout show | grep -q "Role: gateway\|Capacity:"; then
-  echo "layout already applied"
+# Check whether a layout version has already been applied.
+CURRENT_VERSION=$(/garage -c /etc/garage.toml layout show 2>&1 | grep "Current cluster layout version:" | awk '{print $NF}')
+if [ -n "$CURRENT_VERSION" ] && [ "$CURRENT_VERSION" -ge 1 ] 2>/dev/null; then
+  echo "layout already applied (version $CURRENT_VERSION)"
 else
   /garage -c /etc/garage.toml layout assign -z dc1 -c 1G "$NODE_ID"
   /garage -c /etc/garage.toml layout apply --version 1

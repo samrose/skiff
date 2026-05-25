@@ -1,0 +1,14 @@
+<clickhouse>
+  <!-- Allow the default user to connect from any address.
+       Required for the Go integration tests that run on the macOS host and
+       connect through Docker's port mapping (source IP is the host bridge IP,
+       not 127.0.0.1). -->
+  <users>
+    <default>
+      <networks>
+        <ip>::/0</ip>
+        <ip>0.0.0.0/0</ip>
+      </networks>
+    </default>
+  </users>
+</clickhouse>

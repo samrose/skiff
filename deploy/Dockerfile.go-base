@@ -1,0 +1,8 @@
+# syntax=docker/dockerfile:1.7
+# Shared Go build base for all skiff binaries.
+# Usage: import this stage from other Dockerfiles via --from=go-base.
+FROM golang:1.26-bookworm AS go-base
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY . .

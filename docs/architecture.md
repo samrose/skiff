@@ -78,3 +78,5 @@ Nix clients add the resolver/Garage URL as a substituter and pull builds.
 4. **Resolver** answers substituter queries. Nix clients add the resolver URL to `nix.conf` as a substituter and pull built packages transparently.
 
 See `docs/threat-model.md` for what the ed25519 signature attests to, and what it does not.
+
+See `docs/classification.md` for the six package classes, their precedence order, and the exact rules that determine whether a package gets built.
