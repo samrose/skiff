@@ -6,14 +6,12 @@ volumes:
   clickhouse-data: {}
   garage-data: {}
   garage-meta: {}
-  nix-store: {}            # used in Milestone 5 by the worker container
-
+  nix-store: {} # used in Milestone 5 by the worker container
 x-platform: &platform
   platform: ${SKIFF_PLATFORM:-linux/amd64}
-
 services:
   temporal-postgres:
-    <<: *platform
+    !!merge <<: *platform
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: temporal
@@ -27,12 +25,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-
   temporal:
-    <<: *platform
+    !!merge <<: *platform
     image: temporalio/auto-setup:1.25
     depends_on:
-      temporal-postgres: { condition: service_healthy }
+      temporal-postgres: {condition: service_healthy}
     ports: ["7233:7233", "8233:8233"]
     environment:
       DB: postgres12
@@ -47,9 +44,8 @@ services:
       timeout: 3s
       retries: 24
       start_period: 30s
-
   clickhouse:
-    <<: *platform
+    !!merge <<: *platform
     image: clickhouse/clickhouse-server:24.8
     ports: ["8123:8123", "9000:9000"]
     networks: [skiff]
@@ -58,15 +54,14 @@ services:
       - "./clickhouse-init:/docker-entrypoint-initdb.d:ro"
       - "./clickhouse-users:/etc/clickhouse-server/users.d:ro"
     ulimits:
-      nofile: { soft: 262144, hard: 262144 }
+      nofile: {soft: 262144, hard: 262144}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
       interval: 5s
       timeout: 3s
       retries: 12
-
   garage:
-    <<: *platform
+    !!merge <<: *platform
     image: dxflrs/garage:v1.0.1
     ports: ["3900:3900", "3902:3902"]
     networks: [skiff]
@@ -79,35 +74,33 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-
   garage-bootstrap:
-    <<: *platform
+    !!merge <<: *platform
     # Built from Dockerfile.garage-bootstrap: Alpine + /garage binary copied from
     # dxflrs/garage:v1.0.1 (which is scratch-based and has no shell).
     build:
       context: .
       dockerfile: Dockerfile.garage-bootstrap
     depends_on:
-      garage: { condition: service_healthy }
+      garage: {condition: service_healthy}
     networks: [skiff]
     volumes:
       - "./scripts/bootstrap-garage.sh:/bootstrap.sh:ro"
-      - "./scripts:/shared-scripts"          # writable; bootstrap drops skiff-keys.env here
+      - "./scripts:/shared-scripts" # writable; bootstrap drops skiff-keys.env here
       - "garage-data:/var/lib/garage/data"
       - "garage-meta:/var/lib/garage/meta"
       - "./garage.toml:/etc/garage.toml:ro"
     entrypoint: ["/bin/sh", "/bootstrap.sh"]
     restart: "no"
-
   ingest:
-    <<: *platform
+    !!merge <<: *platform
     build:
       context: ..
       dockerfile: deploy/Dockerfile.ingest
     depends_on:
-      clickhouse: { condition: service_healthy }
-      garage: { condition: service_healthy }
-      garage-bootstrap: { condition: service_completed_successfully }
+      clickhouse: {condition: service_healthy}
+      garage: {condition: service_healthy}
+      garage-bootstrap: {condition: service_completed_successfully}
     networks: [skiff]
     environment:
       CLICKHOUSE_DSN: "clickhouse://default:@clickhouse:9000/skiff"
@@ -118,6 +111,6 @@ services:
       REGISTRY_USER_AGENT: "skiff-ingest/0.1 (+contact@example.invalid)"
       LOG_LEVEL: "info"
       LISTEN_ADDR: ":9090"
-    env_file: ["./scripts/skiff-keys.env"]   # written by bootstrap; gitignored
+    env_file: ["./scripts/skiff-keys.env"] # written by bootstrap; gitignored
     ports: ["9091:9090"]
     restart: unless-stopped

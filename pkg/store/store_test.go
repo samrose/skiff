@@ -70,7 +70,8 @@ func TestMigrate_AppliesFromScratch(t *testing.T) {
 	}
 	for _, tbl := range wantTables {
 		var count uint64
-		err := s.conn.QueryRow(ctx,
+		err := s.conn.QueryRow(
+			ctx,
 			`SELECT count() FROM system.tables WHERE database = 'skiff' AND name = ?`, tbl,
 		).Scan(&count)
 		if err != nil || count == 0 {
@@ -79,7 +80,8 @@ func TestMigrate_AppliesFromScratch(t *testing.T) {
 	}
 
 	var migVersion uint32
-	if err := s.conn.QueryRow(ctx,
+	if err := s.conn.QueryRow(
+		ctx,
 		`SELECT max(version) FROM skiff.schema_migrations FINAL`,
 	).Scan(&migVersion); err != nil {
 		t.Fatalf("query schema_migrations: %v", err)
@@ -106,7 +108,8 @@ func TestMigrate_Idempotent(t *testing.T) {
 
 	// schema_migrations should still have exactly one row for version=1.
 	var rowCount uint64
-	if err := s.conn.QueryRow(ctx,
+	if err := s.conn.QueryRow(
+		ctx,
 		`SELECT count() FROM skiff.schema_migrations FINAL WHERE version = 1`,
 	).Scan(&rowCount); err != nil {
 		t.Fatalf("count schema_migrations: %v", err)
@@ -202,7 +205,8 @@ func TestRecordObservation_AndRead(t *testing.T) {
 	}
 
 	var count uint64
-	if err := s.conn.QueryRow(ctx,
+	if err := s.conn.QueryRow(
+		ctx,
 		`SELECT count() FROM skiff.package_observations WHERE name = ? AND version = ?`,
 		obs.Name, obs.Version,
 	).Scan(&count); err != nil {
@@ -299,15 +303,12 @@ func TestRecordBuildSuccess(t *testing.T) {
 		t.Fatalf("RecordBuildStarted: %v", err)
 	}
 
-	narHex := "aa" + string(make([]byte, 62))
-	fileHex := "bb" + string(make([]byte, 62))
 	// Build valid 64-char hex strings.
-	narHex = "aabbccddeeff00112233445566778899aabbccddeeff001122334455667788"
-	// Make exactly 64 chars.
+	narHex := "aabbccddeeff00112233445566778899aabbccddeeff001122334455667788"
 	for len(narHex) < 64 {
 		narHex += "9"
 	}
-	fileHex = "bbccddeeff00112233445566778899aabbccddeeff0011223344556677889900"
+	fileHex := "bbccddeeff00112233445566778899aabbccddeeff0011223344556677889900"
 	for len(fileHex) < 64 {
 		fileHex += "0"
 	}
@@ -382,7 +383,8 @@ func TestRecordEvent(t *testing.T) {
 	// Verify at least one row per event_type landed.
 	for _, et := range eventTypes {
 		var count uint64
-		if err := s.conn.QueryRow(ctx,
+		if err := s.conn.QueryRow(
+			ctx,
 			`SELECT count() FROM skiff.events WHERE event_type = ? AND name = 'test-event-pkg'`,
 			et,
 		).Scan(&count); err != nil {

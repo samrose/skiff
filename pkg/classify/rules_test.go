@@ -231,8 +231,8 @@ func TestNegativeCases(t *testing.T) {
 			files: map[string][]byte{
 				"package.json": []byte(`{"name":"commented-url","version":"1.0.0"}`),
 			},
-			wantNot: ClassFetchesAtInstall,
-			wantIs:  ClassHasLifecycleScript,
+			wantNot:  ClassFetchesAtInstall,
+			wantIs:   ClassHasLifecycleScript,
 			wantRule: "lifecycle.install",
 		},
 		{
@@ -468,9 +468,9 @@ func TestVersion(t *testing.T) {
 	if Version == "" {
 		t.Fatal("Version constant is empty")
 	}
-	c, _ := Classify(strings.NewReader(""))
-	// Even on error, version is set (ruleBroken fires before version is set by Classify).
-	// Let's check via a valid tarball.
+	// Verify Classify doesn't panic on empty input; result is discarded.
+	_, _ = Classify(strings.NewReader(""))
+	// The substantive assertion happens against a real fixture.
 	f := openFixture(t, "pure-js", "left-pad-1.3.0.tgz")
 	c, err := Classify(f)
 	if err != nil {

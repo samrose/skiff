@@ -1,6 +1,7 @@
 package classify
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -57,7 +58,8 @@ var secretLiterals = []string{
 func ruleBroken(files map[string][]byte, pkg *PackageJSON, unpackErr error) (Classification, bool) {
 	if unpackErr != nil {
 		var reason string
-		if jpe, ok := unpackErr.(*jsonParseError); ok {
+		var jpe *jsonParseError
+		if errors.As(unpackErr, &jpe) {
 			reason = jpe.Error()
 		} else {
 			reason = fmt.Sprintf("tarball failed to unpack: %v", unpackErr)
