@@ -1,0 +1,59 @@
+# Skiff golangci-lint config.
+# Conservative defaults for a streaming pipeline + clickhouse + s3 codebase.
+# Adjust as Phase 1 surfaces real signal.
+version: "2"
+run:
+  timeout: 5m
+  go: "1.26"
+  tests: true
+output:
+  formats:
+    text:
+      path: stdout
+linters:
+  default: none
+  enable:
+    - errcheck # unchecked errors
+    - govet # `go vet`
+    - ineffassign # ineffective assignments
+    - staticcheck # large bug/style/perf set (replaces gosimple, stylecheck, unused, etc.)
+    - unconvert # redundant type conversions
+    - misspell # English spelling
+    - bodyclose # response.Body.Close() called?
+    - errorlint # error wrapping conventions
+    - gocritic # opinionated readability suggestions
+    - nilerr # return nil after non-nil err
+    - prealloc # slice preallocation
+  settings:
+    errcheck:
+      check-blank: false # `_ := f()` is the explicit signal we mean to ignore
+      exclude-functions:
+        - (io.Closer).Close
+        - (net/http.ResponseWriter).Write
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # struct field ordering — too noisy, not worth perf in our codebase
+        - shadow # `if err := ...; err != nil` is idiomatic Go; we accept the shadowing
+    staticcheck:
+      checks: ["all", "-ST1000", "-ST1003"] # we don't require package docstrings
+    gocritic:
+      disabled-checks:
+        - ifElseChain # too noisy on switch-like ladders
+  exclusions:
+    rules:
+      # _test.go can be more relaxed.
+      - path: _test\.go$
+        linters: [errcheck, gocritic, prealloc]
+      # main.go in /cmd/* is allowed to log-and-exit; errcheck is too strict on os.Exit paths.
+      - path: cmd/.*/main\.go$
+        linters: [errcheck]
+      # Generated migrations file — keep the comment style we have.
+      - path: pkg/store/schema\.go$
+        text: "redundant"
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

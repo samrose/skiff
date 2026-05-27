@@ -28,8 +28,8 @@ type Config struct {
 	S3BucketCache     string
 
 	// Cache
-	CachePublicURL     string
-	CacheSigningKey    string // raw "name:base64-secret"
+	CachePublicURL      string
+	CacheSigningKey     string // raw "name:base64-secret"
 	CacheSigningKeyFile string // path to file; wins over CacheSigningKey when both set
 
 	// Registry
@@ -54,27 +54,27 @@ type Config struct {
 // required fields. It returns an error listing all missing required variables.
 func Load() (*Config, error) {
 	c := &Config{
-		TemporalHost:         getenv("TEMPORAL_HOST", "temporal:7233"),
-		TemporalNamespace:    getenv("TEMPORAL_NAMESPACE", "default"),
-		TemporalTaskQueue:    getenv("TEMPORAL_TASK_QUEUE", "skiff-default"),
-		ClickHouseDSN:        getenv("CLICKHOUSE_DSN", "clickhouse://default:@clickhouse:9000/skiff"),
-		S3Endpoint:           getenv("S3_ENDPOINT", "http://garage:3900"),
-		S3Region:             getenv("S3_REGION", "garage"),
-		S3AccessKeyID:        getenv("S3_ACCESS_KEY_ID", ""),
-		S3SecretAccessKey:    getenv("S3_SECRET_ACCESS_KEY", ""),
-		S3BucketSources:      getenv("S3_BUCKET_SOURCES", "skiff-sources"),
-		S3BucketCache:        getenv("S3_BUCKET_CACHE", "skiff-cache"),
-		CachePublicURL:       getenv("CACHE_PUBLIC_URL", "http://localhost:8081/cache"),
-		CacheSigningKey:      getenv("CACHE_SIGNING_KEY", ""),
-		CacheSigningKeyFile:  getenv("CACHE_SIGNING_KEY_FILE", "/run/secrets/cache-signing-key"),
-		RegistryURL:          getenv("REGISTRY_URL", "https://replicate.npmjs.com"),
-		RegistryUserAgent:    getenv("REGISTRY_USER_AGENT", "skiff-ingest/0.1 (+contact@example.invalid)"),
-		PackumentURL:         getenv("PACKUMENT_URL", "https://registry.npmjs.org"),
-		NodejsVersionTag:     getenv("NODEJS_VERSION_TAG", "20"),
-		TargetSystem:         getenv("TARGET_SYSTEM", "x86_64-linux"),
-		ListenAddr:           getenv("LISTEN_ADDR", ":8081"),
-		MetricsAddr:          getenv("METRICS_ADDR", ":9090"),
-		LogLevel:             getenv("LOG_LEVEL", "info"),
+		TemporalHost:        getenv("TEMPORAL_HOST", "temporal:7233"),
+		TemporalNamespace:   getenv("TEMPORAL_NAMESPACE", "default"),
+		TemporalTaskQueue:   getenv("TEMPORAL_TASK_QUEUE", "skiff-default"),
+		ClickHouseDSN:       getenv("CLICKHOUSE_DSN", "clickhouse://default:@clickhouse:9000/skiff"),
+		S3Endpoint:          getenv("S3_ENDPOINT", "http://garage:3900"),
+		S3Region:            getenv("S3_REGION", "garage"),
+		S3AccessKeyID:       getenv("S3_ACCESS_KEY_ID", ""),
+		S3SecretAccessKey:   getenv("S3_SECRET_ACCESS_KEY", ""),
+		S3BucketSources:     getenv("S3_BUCKET_SOURCES", "skiff-sources"),
+		S3BucketCache:       getenv("S3_BUCKET_CACHE", "skiff-cache"),
+		CachePublicURL:      getenv("CACHE_PUBLIC_URL", "http://localhost:8081/cache"),
+		CacheSigningKey:     getenv("CACHE_SIGNING_KEY", ""),
+		CacheSigningKeyFile: getenv("CACHE_SIGNING_KEY_FILE", "/run/secrets/cache-signing-key"),
+		RegistryURL:         getenv("REGISTRY_URL", "https://replicate.npmjs.com"),
+		RegistryUserAgent:   getenv("REGISTRY_USER_AGENT", "skiff-ingest/0.1 (+contact@example.invalid)"),
+		PackumentURL:        getenv("PACKUMENT_URL", "https://registry.npmjs.org"),
+		NodejsVersionTag:    getenv("NODEJS_VERSION_TAG", "20"),
+		TargetSystem:        getenv("TARGET_SYSTEM", "x86_64-linux"),
+		ListenAddr:          getenv("LISTEN_ADDR", ":8081"),
+		MetricsAddr:         getenv("METRICS_ADDR", ":9090"),
+		LogLevel:            getenv("LOG_LEVEL", "info"),
 	}
 
 	pollStr := getenv("REGISTRY_POLL_INTERVAL", "2s")

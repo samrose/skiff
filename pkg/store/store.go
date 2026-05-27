@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -41,15 +43,15 @@ func (s *Store) Close() error {
 
 // Observation represents a row in package_observations.
 type Observation struct {
-	ObservedAt        time.Time
-	Name              string
-	Version           string
-	RegistrySeq       uint64
-	PackumentRev      string
-	TarballURL        string
-	TarballSHA512Hex  string // 128 hex chars
-	TarballSizeBytes  uint64
-	SourceObjectKey   string
+	ObservedAt       time.Time
+	Name             string
+	Version          string
+	RegistrySeq      uint64
+	PackumentRev     string
+	TarballURL       string
+	TarballSHA512Hex string // 128 hex chars
+	TarballSizeBytes uint64
+	SourceObjectKey  string
 }
 
 // Classification represents a row in classifications.
@@ -75,12 +77,12 @@ type BuildKey struct {
 // BuildSuccess carries the full result of a successful build.
 type BuildSuccess struct {
 	BuildKey
-	StorePath        string
-	NarSHA256Hex     string // 64 hex chars
-	NarSizeBytes     uint64
-	FileSHA256Hex    string // 64 hex chars
-	FileSizeBytes    uint64
-	BuildDurationMS  uint32
+	StorePath       string
+	NarSHA256Hex    string // 64 hex chars
+	NarSizeBytes    uint64
+	FileSHA256Hex   string // 64 hex chars
+	FileSizeBytes   uint64
+	BuildDurationMS uint32
 }
 
 // BuildFailure carries the result of a failed build.
@@ -92,31 +94,31 @@ type BuildFailure struct {
 
 // Build represents a row read back from skiff.builds.
 type Build struct {
-	BuiltAt          time.Time
-	Name             string
-	Version          string
-	System           string
-	NodejsVersion    string
-	Status           string // "success" | "failed"
-	StorePath        string
-	NarSHA256Hex     string
-	NarSizeBytes     uint64
-	FileSHA256Hex    string
-	FileSizeBytes    uint64
-	BuildDurationMS  uint32
-	LogExcerpt       string
+	BuiltAt         time.Time
+	Name            string
+	Version         string
+	System          string
+	NodejsVersion   string
+	Status          string // "success" | "failed"
+	StorePath       string
+	NarSHA256Hex    string
+	NarSizeBytes    uint64
+	FileSHA256Hex   string
+	FileSizeBytes   uint64
+	BuildDurationMS uint32
+	LogExcerpt      string
 }
 
 // CachePublication represents a row in cache_publications.
 type CachePublication struct {
-	Name              string
-	Version           string
-	System            string
-	NodejsVersion     string
-	StorePath         string
-	NarinfoObjectKey  string
-	NarObjectKey      string
-	CacheURLBase      string
+	Name             string
+	Version          string
+	System           string
+	NodejsVersion    string
+	StorePath        string
+	NarinfoObjectKey string
+	NarObjectKey     string
+	CacheURLBase     string
 }
 
 // Event represents a row in the events append-only log.
@@ -136,12 +138,15 @@ type Event struct {
 // Returns 0 if no checkpoint has been stored yet.
 func (s *Store) GetChangesCheckpoint(ctx context.Context) (uint64, error) {
 	var val string
-	err := s.conn.QueryRow(ctx,
+	err := s.conn.QueryRow(
+		ctx,
 		`SELECT value FROM skiff.ingest_state FINAL WHERE key = 'changes_feed_seq'`,
 	).Scan(&val)
-	if err != nil {
-		// No row yet is a normal condition on first run.
+	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("store: get changes checkpoint: %w", err)
 	}
 	var seq uint64
 	if _, err := fmt.Sscanf(val, "%d", &seq); err != nil {
@@ -152,7 +157,8 @@ func (s *Store) GetChangesCheckpoint(ctx context.Context) (uint64, error) {
 
 // SetChangesCheckpoint persists the latest sequence number.
 func (s *Store) SetChangesCheckpoint(ctx context.Context, seq uint64) error {
-	if err := s.conn.Exec(ctx,
+	if err := s.conn.Exec(
+		ctx,
 		`INSERT INTO skiff.ingest_state (key, value) VALUES ('changes_feed_seq', ?)`,
 		fmt.Sprintf("%d", seq),
 	); err != nil {
@@ -171,7 +177,8 @@ func (s *Store) RecordObservation(ctx context.Context, obs Observation) error {
 	if observedAt.IsZero() {
 		observedAt = time.Now().UTC()
 	}
-	if err := s.conn.Exec(ctx,
+	if err := s.conn.Exec(
+		ctx,
 		`INSERT INTO skiff.package_observations
 		 (observed_at, name, version, registry_seq, packument_rev,
 		  tarball_url, tarball_sha512_hex, tarball_size_bytes, source_object_key)
@@ -195,7 +202,8 @@ func (s *Store) RecordClassification(ctx context.Context, c Classification) erro
 	if classifiedAt.IsZero() {
 		classifiedAt = time.Now().UTC()
 	}
-	if err := s.conn.Exec(ctx,
+	if err := s.conn.Exec(
+		ctx,
 		`INSERT INTO skiff.classifications
 		 (classified_at, name, version, classification, reason, rule_matched, classifier_version)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -211,7 +219,8 @@ func (s *Store) RecordClassification(ctx context.Context, c Classification) erro
 // Returns (zero, false, nil) when no row exists.
 func (s *Store) GetLatestClassification(ctx context.Context, name, version string) (Classification, bool, error) {
 	var c Classification
-	err := s.conn.QueryRow(ctx,
+	err := s.conn.QueryRow(
+		ctx,
 		`SELECT classified_at, name, version, classification, reason, rule_matched, classifier_version
 		 FROM skiff.classifications FINAL
 		 WHERE name = ? AND version = ?`,
@@ -220,9 +229,11 @@ func (s *Store) GetLatestClassification(ctx context.Context, name, version strin
 		&c.ClassifiedAt, &c.Name, &c.Version, &c.Classification,
 		&c.Reason, &c.RuleMatched, &c.ClassifierVersion,
 	)
-	if err != nil {
-		// No row is a normal outcome.
+	if errors.Is(err, sql.ErrNoRows) {
 		return Classification{}, false, nil
+	}
+	if err != nil {
+		return Classification{}, false, fmt.Errorf("store: get classification: %w", err)
 	}
 	return c, true, nil
 }
@@ -234,7 +245,8 @@ func (s *Store) GetLatestClassification(ctx context.Context, name, version strin
 // RecordBuildStarted inserts a "failed" placeholder build row so the key exists
 // while the build is in flight. The activity updates it on success or failure.
 func (s *Store) RecordBuildStarted(ctx context.Context, b BuildKey) error {
-	if err := s.conn.Exec(ctx,
+	if err := s.conn.Exec(
+		ctx,
 		`INSERT INTO skiff.builds
 		 (name, version, system, nodejs_version, status)
 		 VALUES (?, ?, ?, ?, 'failed')`,
@@ -247,7 +259,8 @@ func (s *Store) RecordBuildStarted(ctx context.Context, b BuildKey) error {
 
 // RecordBuildSuccess replaces the placeholder row with a successful build result.
 func (s *Store) RecordBuildSuccess(ctx context.Context, b BuildSuccess) error {
-	if err := s.conn.Exec(ctx,
+	if err := s.conn.Exec(
+		ctx,
 		`INSERT INTO skiff.builds
 		 (name, version, system, nodejs_version, status,
 		  store_path, nar_sha256_hex, nar_size_bytes,
@@ -264,7 +277,8 @@ func (s *Store) RecordBuildSuccess(ctx context.Context, b BuildSuccess) error {
 
 // RecordBuildFailure replaces the placeholder row with a failed build result.
 func (s *Store) RecordBuildFailure(ctx context.Context, b BuildFailure) error {
-	if err := s.conn.Exec(ctx,
+	if err := s.conn.Exec(
+		ctx,
 		`INSERT INTO skiff.builds
 		 (name, version, system, nodejs_version, status, log_excerpt, build_duration_ms)
 		 VALUES (?, ?, ?, ?, 'failed', ?, ?)`,
@@ -280,7 +294,8 @@ func (s *Store) RecordBuildFailure(ctx context.Context, b BuildFailure) error {
 // Returns (zero, false, nil) when no row exists.
 func (s *Store) GetLatestBuild(ctx context.Context, name, version, system, nodejs string) (Build, bool, error) {
 	var b Build
-	err := s.conn.QueryRow(ctx,
+	err := s.conn.QueryRow(
+		ctx,
 		`SELECT built_at, name, version, system, nodejs_version, status,
 		        store_path, nar_sha256_hex, nar_size_bytes,
 		        file_sha256_hex, file_size_bytes, build_duration_ms, log_excerpt
@@ -292,8 +307,11 @@ func (s *Store) GetLatestBuild(ctx context.Context, name, version, system, nodej
 		&b.StorePath, &b.NarSHA256Hex, &b.NarSizeBytes,
 		&b.FileSHA256Hex, &b.FileSizeBytes, &b.BuildDurationMS, &b.LogExcerpt,
 	)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		return Build{}, false, nil
+	}
+	if err != nil {
+		return Build{}, false, fmt.Errorf("store: get build: %w", err)
 	}
 	return b, true, nil
 }
@@ -304,7 +322,8 @@ func (s *Store) GetLatestBuild(ctx context.Context, name, version, system, nodej
 
 // RecordCachePublication inserts or replaces the cache publication for a build key.
 func (s *Store) RecordCachePublication(ctx context.Context, p CachePublication) error {
-	if err := s.conn.Exec(ctx,
+	if err := s.conn.Exec(
+		ctx,
 		`INSERT INTO skiff.cache_publications
 		 (name, version, system, nodejs_version,
 		  store_path, narinfo_object_key, nar_object_key, cache_url_base)
@@ -321,7 +340,8 @@ func (s *Store) RecordCachePublication(ctx context.Context, p CachePublication) 
 // Returns (zero, false, nil) when no row exists.
 func (s *Store) GetLatestCachePublication(ctx context.Context, name, version, system, nodejs string) (CachePublication, bool, error) {
 	var p CachePublication
-	err := s.conn.QueryRow(ctx,
+	err := s.conn.QueryRow(
+		ctx,
 		`SELECT name, version, system, nodejs_version,
 		        store_path, narinfo_object_key, nar_object_key, cache_url_base
 		 FROM skiff.cache_publications FINAL
@@ -331,8 +351,11 @@ func (s *Store) GetLatestCachePublication(ctx context.Context, name, version, sy
 		&p.Name, &p.Version, &p.System, &p.NodejsVersion,
 		&p.StorePath, &p.NarinfoObjectKey, &p.NarObjectKey, &p.CacheURLBase,
 	)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		return CachePublication{}, false, nil
+	}
+	if err != nil {
+		return CachePublication{}, false, fmt.Errorf("store: get cache publication: %w", err)
 	}
 	return p, true, nil
 }
@@ -348,7 +371,8 @@ func (s *Store) GetLatestCachePublication(ctx context.Context, name, version, sy
 // log. The helper just prevents redundant S3 uploads and re-observations.
 func (s *Store) ObservationExists(ctx context.Context, name, version string) (bool, error) {
 	var count uint64
-	err := s.conn.QueryRow(ctx,
+	err := s.conn.QueryRow(
+		ctx,
 		`SELECT count() FROM skiff.package_observations WHERE name = ? AND version = ?`,
 		name, version,
 	).Scan(&count)
@@ -368,7 +392,8 @@ func (s *Store) RecordEvent(ctx context.Context, e Event) error {
 	if payload == "" {
 		payload = "{}"
 	}
-	if err := s.conn.Exec(ctx,
+	if err := s.conn.Exec(
+		ctx,
 		`INSERT INTO skiff.events (event_type, name, version, workflow_id, payload)
 		 VALUES (?, ?, ?, ?, ?)`,
 		e.EventType, e.Name, e.Version, e.WorkflowID, payload,

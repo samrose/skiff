@@ -55,7 +55,8 @@ func init() {
 // ---------------------------------------------------------------------------
 
 func newS3Client(ctx context.Context, cfg *config.Config) (*s3.Client, error) {
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+	awsCfg, err := awsconfig.LoadDefaultConfig(
+		ctx,
 		awsconfig.WithRegion(cfg.S3Region),
 		awsconfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(
@@ -320,13 +321,19 @@ func fetchCurrentSeq(ctx context.Context, client *http.Client, baseURL, userAgen
 // ---------------------------------------------------------------------------
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "ingest: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ingest: config error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("config error: %w", err)
 	}
 
 	log := obs.NewLogger(cfg.LogLevel)
@@ -335,23 +342,20 @@ func main() {
 	// Open ClickHouse store.
 	st, err := store.Open(ctx, cfg.ClickHouseDSN)
 	if err != nil {
-		log.Error("store open failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("store open failed: %w", err)
 	}
 	defer st.Close()
 
 	// Run schema migrations.
 	if err := st.Migrate(ctx); err != nil {
-		log.Error("migration failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("migration failed: %w", err)
 	}
 	log.Info("migrations applied")
 
 	// Build S3 client.
 	s3c, err := newS3Client(ctx, cfg)
 	if err != nil {
-		log.Error("s3 client init failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("s3 client init failed: %w", err)
 	}
 
 	// Start metrics server in background.
@@ -365,8 +369,7 @@ func main() {
 	// Load last checkpoint.
 	since, err := st.GetChangesCheckpoint(ctx)
 	if err != nil {
-		log.Error("get checkpoint failed", "err", err)
-		os.Exit(1)
+		return fmt.Errorf("get checkpoint failed: %w", err)
 	}
 	if since == 0 {
 		// No prior checkpoint: start from near the current HEAD to avoid replaying
@@ -390,7 +393,7 @@ func main() {
 		select {
 		case <-ctx.Done():
 			log.Info("context cancelled, shutting down")
-			return
+			return nil
 		default:
 		}
 
@@ -419,7 +422,7 @@ func main() {
 			log.Warn("poll error", "err", pollErr, "backoff", backoff)
 			select {
 			case <-ctx.Done():
-				return
+				return nil
 			case <-time.After(backoff):
 			}
 			backoff = time.Duration(math.Min(float64(backoff*2), float64(maxBackoff)))
@@ -444,7 +447,7 @@ func main() {
 		if lastSeq == since {
 			select {
 			case <-ctx.Done():
-				return
+				return nil
 			case <-time.After(cfg.RegistryPollInterval):
 			}
 		}
