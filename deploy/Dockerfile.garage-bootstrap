@@ -2,5 +2,5 @@
 # dxflrs/garage:v1.0.1 is a scratch image with only /garage — no shell.
 # We copy the binary into Alpine so we have both sh and /garage in one container.
 FROM dxflrs/garage:v1.0.1 AS garage-bin
-FROM alpine:3.20
+FROM alpine:3.23
 COPY --from=garage-bin /garage /garage
